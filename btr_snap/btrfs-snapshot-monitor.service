@@ -1,0 +1,24 @@
+[Unit]
+Description=BTRFS Snapshot Monitor
+Documentation=man:btrfs-snapshot-monitor(8)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /path/to/btrfs_snapshot_monitor.py --config /etc/btrfs_snapshot_monitor.conf
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/btrfs /var/log
+
+[Install]
+WantedBy=multi-user.target 
