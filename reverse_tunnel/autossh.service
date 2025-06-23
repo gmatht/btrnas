@@ -1,0 +1,23 @@
+[Unit]
+Description=Autossh SSH Tunnel Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/autossh -N -R 0.0.0.0:20000:localhost:22 dansted.org
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/var/log
+
+[Install]
+WantedBy=multi-user.target 
