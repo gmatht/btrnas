@@ -96,30 +96,14 @@ class BTRFSSnapshotMonitor:
                 if 'Generation:' in line:
                     generation = line.split(':')[1].strip()
                     return generation
-                    
-            # Fallback: use file modification times and sizes
-            return self.get_directory_hash(subvolume_path)
+
+            self.logger.warning(f"Failed to get subvolume hash, returning None")
+            return None
             
         except Exception as e:
             self.logger.error(f"Failed to get subvolume hash: {e}")
             return self.get_directory_hash(subvolume_path)
             
-    def get_directory_hash(self, directory_path: str) -> str:
-        """Get a hash based on directory contents (fallback method)"""
-        try:
-            # Use find to get file information
-            result = self.run_command([
-                'find', directory_path, '-type', 'f', 
-                '-exec', 'stat', '-c', '%Y %s %n', '{}', ';'
-            ])
-            
-            # Create hash from file information
-            content = result.stdout.encode('utf-8')
-            return hashlib.md5(content).hexdigest()
-            
-        except Exception as e:
-            self.logger.error(f"Failed to get directory hash: {e}")
-            return str(time.time())  # Fallback to timestamp
             
     def has_changes(self) -> bool:
         """Check if the source subvolume has changed since last snapshot"""
@@ -207,23 +191,16 @@ class BTRFSSnapshotMonitor:
         
         try:
             # List all directories in snapshot directory
-            for line in os.listdir(self.snapshot_dir):
-                if line.strip():
-                    # Parse subvolume list output
-                    parts = line.split()
-                    if len(parts) >= 9:
-                        snapshot_name = parts[8]
-                        
-                        # Check if it matches our naming pattern
-                        if '_' in snapshot_name:
-                            try:
-                                # Extract type from name (YYYYMMDD_HHMMSS_TYPE)
-                                type_part = snapshot_name.split('_')[-1]
-                                if type_part in self.snapshot_types:
-                                    snapshots_by_type[type_part].append(snapshot_name)
-                                    print(f"Added snapshot: {snapshot_name} to {type_part}")
-                            except IndexError:
-                                continue
+            for snapshot_name in os.listdir(self.snapshot_dir):
+                if '_' in snapshot_name:
+                    try:
+                        # Extract type from name (YYYYMMDD_HHMMSS_TYPE)
+                        type_part = snapshot_name.split('_')[-1]
+                        if type_part in self.snapshot_types:
+                            snapshots_by_type[type_part].append(snapshot_name)
+                            print(f"Added snapshot: {snapshot_name} to {type_part}")
+                    except IndexError:
+                        continue
                                 
         except Exception as e:
             self.logger.error(f"Failed to list existing snapshots: {e}")

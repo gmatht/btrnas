@@ -110,4 +110,5 @@ echo "3. Check service status: sudo systemctl status btrfs-snapshot-monitor.serv
 echo "4. View logs: sudo journalctl -u btrfs-snapshot-monitor.service -f"
 echo
 print_status "For manual testing, run:"
-echo "sudo python3 $INSTALL_DIR/btrfs_snapshot_monitor.py --dry-run" 
+echo "Host dansted.org:20000
+    ProxyJump dansted.org:22"

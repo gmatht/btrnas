@@ -1,0 +1,22 @@
+[Unit]
+Description=Gmail Download Service for gmatht@gmail.com
+After=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+User=gmatht
+ExecStart=/usr/bin/offlineimap -c /home/gmatht/download_mail/offlineimap.conf
+StandardOutput=journal
+StandardError=journal
+Environment=HOME=/home/gmatht
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/gmatht/Mail
+
+[Install]
+WantedBy=multi-user.target 

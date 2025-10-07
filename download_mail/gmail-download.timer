@@ -1,0 +1,11 @@
+[Unit]
+Description=Gmail Download Timer for gmatht@gmail.com
+Requires=gmail-download.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit=gmail-download.service
+
+[Install]
+WantedBy=timers.target 
