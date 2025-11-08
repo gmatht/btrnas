@@ -1,7 +1,7 @@
 #!/bin/bash
-# Script to resize mmcblk0p2 to 3G and create a new BTRFS partition
+# Script to resize mmcblk0p2 to a user-specified size (default: 3G) and create a new BTRFS partition
 # This script checks for and removes mmcblk0p3 and mmcblk0p4 if they exist,
-# then resizes p2 to 3G and creates a new partition filling the rest of the disk
+# then resizes p2 to the specified size and creates a new partition filling the rest of the disk
 
 set -e
 
@@ -105,6 +105,33 @@ fi
 
 print_status "Starting partition setup for $DEVICE"
 print_warning "This script will modify partitions on $DEVICE. Make sure you have a backup!"
+
+# Prompt for partition 2 size
+echo
+print_status "Partition 2 (mmcblk0p2) will be resized."
+echo -n "Enter the desired size for partition 2 (default: 3G): "
+read -r PART2_SIZE_INPUT
+
+# Use default if empty
+if [[ -z "$PART2_SIZE_INPUT" ]]; then
+    PART2_SIZE_INPUT="3G"
+fi
+
+# Normalize the input (add 'iB' suffix if not present and it's a valid format)
+# Check if it already has a unit suffix
+if [[ "$PART2_SIZE_INPUT" =~ ^[0-9]+[KMGT]?i?B?$ ]]; then
+    # If it ends with just G, M, K, T, add 'iB' for parted compatibility
+    if [[ "$PART2_SIZE_INPUT" =~ ^[0-9]+[KMGT]$ ]]; then
+        PART2_TARGET_SIZE="${PART2_SIZE_INPUT}iB"
+    else
+        PART2_TARGET_SIZE="$PART2_SIZE_INPUT"
+    fi
+else
+    print_error "Invalid size format. Please use formats like: 3G, 3GiB, 4096M, etc."
+    exit 1
+fi
+
+print_status "Partition 2 will be resized to: $PART2_TARGET_SIZE"
 
 # Check if PART3 or PART4 exist
 PART3_EXISTS=false
@@ -247,13 +274,8 @@ if [[ "$PART3_EXISTS" == true ]] || [[ "$PART4_EXISTS" == true ]]; then
     
     print_status "Partition 2 currently ends at sector $PART2_END"
     
-    # Calculate 3G in sectors (assuming 512 byte sectors)
-    # 3G = 3 * 1024 * 1024 * 1024 = 3221225472 bytes
-    # 3221225472 / 512 = 6291456 sectors
-    NEW_PART2_END=$((6291456 - 1))  # -1 because sectors are 0-indexed or we need to account for alignment
-    
-    # Actually, let's use parted's human-readable sizes
-    print_status "Resizing partition 2 to 3G..."
+    # Use parted's human-readable sizes
+    print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
     
     # Delete partitions 3 and 4 if they exist (in reverse order)
     if [[ "$PART4_EXISTS" == true ]]; then
@@ -266,9 +288,9 @@ if [[ "$PART3_EXISTS" == true ]] || [[ "$PART4_EXISTS" == true ]]; then
         parted -s "$DEVICE" rm 3 || print_warning "Failed to delete partition 3 (may not exist in partition table)"
     fi
     
-    # Resize partition 2 to 3G
-    print_status "Resizing partition 2 to 3G..."
-    parted -s "$DEVICE" resizepart 2 3GiB
+    # Resize partition 2
+    print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
+    parted -s "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
     
     # Get the new end of partition 2
     NEW_PART2_END_SECTOR=$(parted -s "$DEVICE" unit s print | grep "^ 2" | awk '{print $3}' | sed 's/s$//')
@@ -278,22 +300,17 @@ else
     print_status "Partitions p3 and p4 do not exist. Checking if partition 2 needs resizing..."
     
     # Get current size of partition 2
-    PART2_SIZE=$(parted -s "$DEVICE" unit MiB print | grep "^ 2" | awk '{print $4}' | sed 's/MiB$//')
+    PART2_CURRENT_SIZE=$(parted -s "$DEVICE" unit MiB print | grep "^ 2" | awk '{print $4}' | sed 's/MiB$//')
     
-    if [[ -z "$PART2_SIZE" ]]; then
+    if [[ -z "$PART2_CURRENT_SIZE" ]]; then
         print_error "Could not determine size of partition 2"
         exit 1
     fi
     
-    # Check if it's already 3G (approximately 3072 MiB)
-    # Convert to integer for comparison (remove decimal part)
-    PART2_SIZE_INT=${PART2_SIZE%.*}
-    if [[ -z "$PART2_SIZE_INT" ]] || [[ "$PART2_SIZE_INT" -lt 3072 ]]; then
-        print_status "Resizing partition 2 from ${PART2_SIZE}MiB to 3G..."
-        parted -s "$DEVICE" resizepart 2 3GiB
-    else
-        print_status "Partition 2 is already approximately 3G or larger"
-    fi
+    # Always resize to target size (parted will handle if it's already that size or larger)
+    print_status "Current partition 2 size: ${PART2_CURRENT_SIZE}MiB"
+    print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
+    parted -s "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
 fi
 
 # Get the end of partition 2 and disk size
