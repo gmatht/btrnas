@@ -268,8 +268,10 @@ if [[ "$PART3_EXISTS" == true ]] || [[ "$PART4_EXISTS" == true ]]; then
         parted -s "$DEVICE" rm 3 || print_warning "Failed to delete partition 3 (may not exist in partition table)"
     fi
     
-    # Resize partition 2
+    # Resize partition 2 (auto-accept any warnings about partition in use)
     print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
+    # Use printf to ensure proper newline handling, pipe "Fix" to answer the prompt
+    printf "Fix\n" | parted "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE" >/dev/null 2>&1 || \
     parted -s "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
     
     # Get the new end of partition 2
@@ -288,8 +290,11 @@ else
     fi
     
     # Always resize to target size (parted will handle if it's already that size or larger)
+    # Auto-accept any warnings about partition in use
     print_status "Current partition 2 size: ${PART2_CURRENT_SIZE}MiB"
     print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
+    # Use printf to ensure proper newline handling, pipe "Fix" to answer the prompt
+    printf "Fix\n" | parted "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE" >/dev/null 2>&1 || \
     parted -s "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
 fi
 
