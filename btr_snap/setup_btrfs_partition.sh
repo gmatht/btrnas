@@ -255,48 +255,42 @@ if [[ "$PART3_EXISTS" == true ]] || [[ "$PART4_EXISTS" == true ]]; then
     print_status "Partition 2 currently ends at sector $PART2_END"
     
     # Use parted's human-readable sizes
-    print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
+    print_status "Resizing partition 2 to $PART2_TARGET_SIZE... (pre)"
     
     # Delete partitions 3 and 4 if they exist (in reverse order)
     if [[ "$PART4_EXISTS" == true ]]; then
         print_status "Deleting partition 4..."
-        parted -s "$DEVICE" rm 4 || print_warning "Failed to delete partition 4 (may not exist in partition table)"
+        parted -s "$DEVICE" yes rm 4 || print_warning "Failed to delete partition 4 (may not exist in partition table)"
     fi
     
     if [[ "$PART3_EXISTS" == true ]]; then
         print_status "Deleting partition 3..."
-        parted -s "$DEVICE" rm 3 || print_warning "Failed to delete partition 3 (may not exist in partition table)"
+        parted -s "$DEVICE" rm yes 3 || print_warning "Failed to delete partition 3 (may not exist in partition table)"
     fi
     
+fi
     # Resize partition 2 (auto-accept any warnings about partition in use)
-    print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
+    print_status "Resizing partition 2 to $PART2_TARGET_SIZE... (force)"
     # Use printf to ensure proper newline handling, pipe "Fix" to answer the prompt
-    printf "Fix\n" | parted "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE" >/dev/null 2>&1 || \
-    parted -s "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
+    #printf "Fix\n" | parted -f "$DEVICE" resizepart 2 yes "$PART2_TARGET_SIZE" >/dev/null 2>&1 || \
+    #echo BYSY
+    #parted ---pretend-input-tty -f -s "$DEVICE" resizepart 2 yes "$PART2_TARGET_SIZE"
+    #parted "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
+    echo BEGIN
+    (
+	echo e
+	echo 2
+	echo $PART2_TARGET_SIZE
+	echo w
+    ) | fdisk "$DEVICE"
+    echo DONE
     
     # Get the new end of partition 2
     NEW_PART2_END_SECTOR=$(parted -s "$DEVICE" unit s print | grep "^ 2" | awk '{print $3}' | sed 's/s$//')
     print_status "Partition 2 now ends at sector $NEW_PART2_END_SECTOR"
-    
-else
-    print_status "Partitions p3 and p4 do not exist. Checking if partition 2 needs resizing..."
-    
-    # Get current size of partition 2
-    PART2_CURRENT_SIZE=$(parted -s "$DEVICE" unit MiB print | grep "^ 2" | awk '{print $4}' | sed 's/MiB$//')
-    
-    if [[ -z "$PART2_CURRENT_SIZE" ]]; then
-        print_error "Could not determine size of partition 2"
-        exit 1
-    fi
-    
-    # Always resize to target size (parted will handle if it's already that size or larger)
-    # Auto-accept any warnings about partition in use
-    print_status "Current partition 2 size: ${PART2_CURRENT_SIZE}MiB"
-    print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
-    # Use printf to ensure proper newline handling, pipe "Fix" to answer the prompt
-    printf "Fix\n" | parted "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE" >/dev/null 2>&1 || \
-    parted -s "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
-fi
+
+    print_status "resizing filesystem to fill partition"
+    resize2fs /dev/mmcblk0p2
 
 print_status "Partition 2 resizing completed."
 
