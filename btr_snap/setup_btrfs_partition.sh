@@ -76,39 +76,19 @@ install_tool() {
     return 0
 }
 
-# Check and install required tools
-print_status "Checking for required tools..."
+print_status "Starting partition setup for $DEVICE"
+print_warning "This script will modify partitions on $DEVICE. Make sure you have a backup!"
 
-# Check for parted (parted package)
+# First, check for and install parted (needed for resizing partition 2)
+print_status "Checking for parted (required for partition resizing)..."
 if ! install_tool "parted" "parted"; then
     print_error "parted is required but could not be installed"
     exit 1
 fi
 
-# Check for mkfs.btrfs (btrfs-progs package)
-if ! install_tool "mkfs.btrfs" "btrfs-progs"; then
-    print_error "btrfs-progs is required but could not be installed"
-    exit 1
-fi
-
-# Check for blkid (util-linux package)
-if ! install_tool "blkid" "util-linux"; then
-    print_error "util-linux is required but could not be installed"
-    exit 1
-fi
-
-# Check for truncate (coreutils package) - needed if creating image file
-if ! install_tool "truncate" "coreutils"; then
-    print_warning "truncate (coreutils) is recommended but could not be installed"
-    print_warning "Image file creation will fail if unpartitioned space is insufficient"
-fi
-
-print_status "Starting partition setup for $DEVICE"
-print_warning "This script will modify partitions on $DEVICE. Make sure you have a backup!"
-
 # Prompt for partition 2 size
 echo
-print_status "Partition 2 (mmcblk0p2) will be resized."
+print_status "Partition 2 (mmcblk0p2) will be resized BEFORE installing other tools."
 echo -n "Enter the desired size for partition 2 (default: 3G): "
 read -r PART2_SIZE_INPUT
 
@@ -311,6 +291,30 @@ else
     print_status "Current partition 2 size: ${PART2_CURRENT_SIZE}MiB"
     print_status "Resizing partition 2 to $PART2_TARGET_SIZE..."
     parted -s "$DEVICE" resizepart 2 "$PART2_TARGET_SIZE"
+fi
+
+print_status "Partition 2 resizing completed."
+
+# Now install remaining required tools
+echo
+print_status "Installing remaining required tools..."
+
+# Check for mkfs.btrfs (btrfs-progs package)
+if ! install_tool "mkfs.btrfs" "btrfs-progs"; then
+    print_error "btrfs-progs is required but could not be installed"
+    exit 1
+fi
+
+# Check for blkid (util-linux package)
+if ! install_tool "blkid" "util-linux"; then
+    print_error "util-linux is required but could not be installed"
+    exit 1
+fi
+
+# Check for truncate (coreutils package) - needed if creating image file
+if ! install_tool "truncate" "coreutils"; then
+    print_warning "truncate (coreutils) is recommended but could not be installed"
+    print_warning "Image file creation will fail if unpartitioned space is insufficient"
 fi
 
 # Get the end of partition 2 and disk size
