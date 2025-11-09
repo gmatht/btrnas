@@ -150,10 +150,10 @@ if errorlevel 1 (
     echo.
 )
 
-:: Step 3: Find the bootfs VFAT partition and copy .sh files
+:: Step 3: Find the bootfs VFAT partition and copy .sh and .py files
 echo.
 echo ========================================
-echo Step 2: Copying .sh files to bootfs partition
+echo Step 2: Copying .sh and .py files to bootfs partition
 echo ========================================
 echo.
 
@@ -197,7 +197,7 @@ for %%d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
 :found_bootfs
 if "%BOOTFS_FOUND%"=="0" (
     echo.
-    echo ERROR: Could not find bootfs (VFAT) partition.
+    echo ERROR: Could not find bootfs VFAT partition.
     echo Please make sure:
     echo   1. The SD card is inserted
     echo   2. The SD card has been written with Raspberry Pi OS
@@ -213,24 +213,74 @@ if "%BOOTFS_FOUND%"=="0" (
     exit /b 1
 )
 
-echo.
-echo Bootfs partition found: %BOOTFS_DRIVE%
-echo.
-
-:: Create /boot directory if it doesn't exist
-if not exist "%BOOTFS_DRIVE%\boot\" (
-    echo Creating /boot directory...
-    mkdir "%BOOTFS_DRIVE%\boot\"
+:: Verify BOOTFS_DRIVE is set
+if not defined BOOTFS_DRIVE (
+    echo ERROR: BOOTFS_DRIVE variable is not set.
+    pause
+    exit /b 1
 )
 
-:: Copy all .sh files to /boot
-echo Copying .sh files to %BOOTFS_DRIVE%\boot\...
+echo.
+echo Bootfs partition found: !BOOTFS_DRIVE!
+echo.
+
+:: Create btrnas directory if it doesn't exist
+set "BTRNAS_DIR=!BOOTFS_DRIVE!\btrnas"
+echo Checking for btrnas directory at: !BTRNAS_DIR!
+if not exist "!BTRNAS_DIR!" (
+    echo Creating btrnas directory...
+    :: Try creating the directory
+    mkdir "!BTRNAS_DIR!" 2>nul
+    if errorlevel 1 (
+        echo.
+        echo ERROR: Failed to create btrnas directory
+        echo Attempting alternative method...
+        :: Try using md command
+        md "!BTRNAS_DIR!" 2>nul
+        if errorlevel 1 (
+            echo ERROR: All directory creation methods failed.
+            echo Please check permissions and try again.
+            echo Bootfs drive: !BOOTFS_DRIVE!
+            pause
+            exit /b 1
+        )
+    )
+    echo btrnas directory created successfully.
+) else (
+    echo btrnas directory already exists.
+)
+
+:: Verify directory exists
+if not exist "!BTRNAS_DIR!" (
+    echo.
+    echo ERROR: btrnas directory does not exist after creation attempt.
+    echo.
+    echo Debug: Listing contents of !BOOTFS_DRIVE!\:
+    dir /b "!BOOTFS_DRIVE!\"
+    echo.
+    echo Please verify the bootfs partition is writable.
+    pause
+    exit /b 1
+)
+
+:: Debug: List contents to verify
+echo Verifying btrnas directory exists...
+dir /b "!BTRNAS_DIR!" >nul 2>&1
+if errorlevel 1 (
+    echo WARNING: Cannot list contents of btrnas directory, but directory check passed.
+) else (
+    echo btrnas directory verified successfully.
+)
+echo.
+
+:: Copy all .sh and .py files to btrnas
+echo Copying .sh and .py files to !BTRNAS_DIR!\...
 set "SCRIPT_DIR=%~dp0"
 set "FILES_COPIED=0"
 
 for %%f in ("%SCRIPT_DIR%*.sh") do (
     echo   Copying %%~nxf...
-    copy /Y "%%f" "%BOOTFS_DRIVE%\boot\" >nul 2>&1
+    copy /Y "%%f" "!BTRNAS_DIR!\" >nul 2>&1
     if !errorlevel! equ 0 (
         set /a FILES_COPIED+=1
     ) else (
@@ -238,55 +288,90 @@ for %%f in ("%SCRIPT_DIR%*.sh") do (
     )
 )
 
-if %FILES_COPIED% equ 0 (
+for %%f in ("%SCRIPT_DIR%*.py") do (
+    echo   Copying %%~nxf...
+    copy /Y "%%f" "!BTRNAS_DIR!\" >nul 2>&1
+    if !errorlevel! equ 0 (
+        set /a FILES_COPIED+=1
+    ) else (
+        echo   WARNING: Failed to copy %%~nxf
+    )
+)
+
+if !FILES_COPIED! equ 0 (
     echo.
-    echo ERROR: No .sh files were copied.
-    echo Please check that .sh files exist in: %SCRIPT_DIR%
+    echo ERROR: No .sh or .py files were copied.
+    echo Please check that .sh or .py files exist in: %SCRIPT_DIR%
     pause
     exit /b 1
 )
 
 echo.
-echo Successfully copied %FILES_COPIED% file(s) to %BOOTFS_DRIVE%\boot
+echo Successfully copied !FILES_COPIED! file(s) to !BTRNAS_DIR!
 echo.
 
-:: Step 4: Append to firmware/firstboot.sh
+:: Step 4: Append to firmware/firstboot.sh, firmware/firstrun.sh, firstboot.sh, or firstrun.sh
 echo ========================================
-echo Step 3: Updating firmware/firstboot.sh
+echo Step 3: Updating firstboot/firstrun script
 echo ========================================
 echo.
 
-set "FIRSTBOOT_FILE=%BOOTFS_DRIVE%\firmware\firstboot.sh"
+set "FIRMWARE_FIRSTBOOT=!BOOTFS_DRIVE!\firmware\firstboot.sh"
+set "FIRMWARE_FIRSTRUN=!BOOTFS_DRIVE!\firmware\firstrun.sh"
+set "ROOT_FIRSTBOOT=!BOOTFS_DRIVE!\firstboot.sh"
+set "ROOT_FIRSTRUN=!BOOTFS_DRIVE!\firstrun.sh"
+set "FIRSTBOOT_FILE="
 
-if not exist "%FIRSTBOOT_FILE%" (
-    echo Creating firmware directory and firstboot.sh...
-    if not exist "%BOOTFS_DRIVE%\firmware\" (
-        mkdir "%BOOTFS_DRIVE%\firmware\"
-    )
-    (
-        echo #!/bin/bash
-        echo # First boot script
-    ) > "%FIRSTBOOT_FILE%"
+:: Check for firstboot.sh or firstrun.sh in firmware/ first, then root
+if exist "!FIRMWARE_FIRSTBOOT!" (
+    set "FIRSTBOOT_FILE=!FIRMWARE_FIRSTBOOT!"
+    echo Found firmware/firstboot.sh
+) else if exist "!FIRMWARE_FIRSTRUN!" (
+    set "FIRSTBOOT_FILE=!FIRMWARE_FIRSTRUN!"
+    echo Found firmware/firstrun.sh
+) else if exist "!ROOT_FIRSTBOOT!" (
+    set "FIRSTBOOT_FILE=!ROOT_FIRSTBOOT!"
+    echo Found firstboot.sh in root
+) else if exist "!ROOT_FIRSTRUN!" (
+    set "FIRSTBOOT_FILE=!ROOT_FIRSTRUN!"
+    echo Found firstrun.sh in root
+) else (
+    echo.
+    echo ERROR: Could not find firstboot.sh or firstrun.sh
+    echo Searched for:
+    echo   - !FIRMWARE_FIRSTBOOT!
+    echo   - !FIRMWARE_FIRSTRUN!
+    echo   - !ROOT_FIRSTBOOT!
+    echo   - !ROOT_FIRSTRUN!
+    echo.
+    echo Something has gone wrong. The firstboot/firstrun script should exist on the bootfs partition.
+    echo Please verify the SD card has been written with Raspberry Pi OS correctly.
+    pause
+    exit /b 1
 )
 
-echo Appending 'bash /boot/setup.sh' to firstboot.sh...
-echo bash /boot/setup.sh >> "%FIRSTBOOT_FILE%"
+:: File exists, need to insert before exit 0 or append (only if line doesn't already exist)
+echo Updating !FIRSTBOOT_FILE!...
+echo Checking if command already exists...
+
+:: Use PowerShell to check if line exists, and if not, insert before exit 0 or append
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$file = '!FIRSTBOOT_FILE!'; $command = 'bash /boot/btrnas/setup.sh'; $lines = Get-Content $file; $alreadyExists = $false; $newLines = @(); $inserted = $false; $foundExit = $false; foreach ($line in $lines) { if ($line -match [regex]::Escape($command)) { $alreadyExists = $true; }; if ($line -match '^\s*exit\s+0\s*$') { $foundExit = $true; if (-not $inserted -and -not $alreadyExists) { $newLines += $command; $inserted = $true; } }; $newLines += $line; }; if ($alreadyExists) { Write-Host 'Command already exists in script, skipping.' -ForegroundColor Green; exit 0 }; if (-not $inserted) { $newLines += $command; if (-not $foundExit) { $newLines += 'exit 0'; } }; Set-Content -Path $file -Value $newLines; if (-not $foundExit) { Write-Host 'WARNING: exit 0 not found in script' -ForegroundColor Yellow; exit 1 } else { Write-Host 'Successfully updated script' -ForegroundColor Green; exit 0 }"
 
 if errorlevel 1 (
     echo.
-    echo ERROR: Failed to update firstboot.sh
-    pause
-    exit /b 1
+    echo WARNING: exit 0 was not found in the script
+    echo The command has been added, but please verify the file manually.
+    echo.
+) else (
+    echo Script check/update completed
 )
 
 echo.
-echo Successfully updated firstboot.sh
-echo.
 
 :: Verify the update
-echo Verifying firstboot.sh contents:
+echo Verifying script contents:
 echo ----------------------------------------
-type "%FIRSTBOOT_FILE%"
+type "!FIRSTBOOT_FILE!"
 echo ----------------------------------------
 echo.
 
@@ -296,11 +381,54 @@ echo ========================================
 echo.
 echo Summary:
 echo   - FAT32 partition created (if needed)
-echo   - .sh files copied to %BOOTFS_DRIVE%\boot
-echo   - firstboot.sh updated to run setup.sh
+echo   - .sh and .py files copied to !BTRNAS_DIR!
+echo   - firstboot/firstrun script updated to run setup.sh
 echo.
 echo The SD card is ready to use!
 echo.
-pause
+
+:: Find and handle processes using the bootfs partition
+echo ========================================
+echo Checking for processes using bootfs partition
+echo ========================================
+echo.
+
+:: Get the drive letter without colon for process checking
+for /f "tokens=1 delims=:" %%a in ("!BOOTFS_DRIVE!") do set "DRIVE_LETTER=%%a"
+
+echo Finding processes using drive !BOOTFS_DRIVE!...
+echo.
+
+:: Use PowerShell to find processes with open handles on the drive
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$drive = '!BOOTFS_DRIVE!'; $driveLetter = '!DRIVE_LETTER!'; $processes = @(); Get-Process | ForEach-Object { try { $procPath = $_.Path; $procCmdLine = ''; try { $procCmdLine = (Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $_.Id)).CommandLine } catch {}; if (($procPath -like ($drive + '*')) -or ($procCmdLine -like ('*' + $drive + '*')) -or ($procCmdLine -like ('*' + $driveLetter + ':*'))) { $processes += $_ } } catch {} }; if ($processes.Count -eq 0) { Write-Host 'No processes found using the bootfs partition.' -ForegroundColor Green; exit 0 } else { Write-Host ('Found ' + $processes.Count + ' process(es) using the bootfs partition:') -ForegroundColor Yellow; $processes | ForEach-Object { Write-Host ('  PID: ' + $_.Id + ' - ' + $_.ProcessName) }; exit 1 }"
+
+if errorlevel 1 (
+    echo.
+    echo Processes are using the bootfs partition.
+    echo Press Enter to kill these processes and eject the drive...
+    pause >nul
+    
+    echo.
+    echo Killing processes...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$drive = '!BOOTFS_DRIVE!'; $driveLetter = '!DRIVE_LETTER!'; Get-Process | ForEach-Object { try { $procPath = $_.Path; $procCmdLine = ''; try { $procCmdLine = (Get-CimInstance Win32_Process -Filter 'ProcessId = ' + $_.Id).CommandLine } catch {}; if (($procPath -like ($drive + '*')) -or ($procCmdLine -like ('*' + $drive + '*')) -or ($procCmdLine -like ('*' + $driveLetter + ':*'))) { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue; Write-Host ('Killed PID: ' + $_.Id + ' - ' + $_.ProcessName) } } catch {} }"
+    
+    echo Waiting for processes to terminate...
+    timeout /t 2 /nobreak >nul
+) else (
+    echo No processes found using the bootfs partition.
+)
+
+echo.
+echo Ejecting drive !BOOTFS_DRIVE!...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $driveLetter = '!DRIVE_LETTER!:'; $driveEject = New-Object -comObject Shell.Application; $driveEject.Namespace(17).ParseName($driveLetter).InvokeVerb('Eject'); exit 0 } catch { Write-Host 'Error ejecting drive: ' + $_.Exception.Message -ForegroundColor Red; exit 1 }"
+
+if errorlevel 1 (
+    echo WARNING: Could not eject drive automatically.
+    echo You may need to eject it manually from Windows Explorer.
+) else (
+    echo Drive ejected successfully.
+)
+
+echo.
 endlocal
 
