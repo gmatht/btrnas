@@ -387,43 +387,12 @@ echo.
 echo The SD card is ready to use!
 echo.
 
-:: Find and handle processes using the bootfs partition
-echo ========================================
-echo Checking for processes using bootfs partition
-echo ========================================
-echo.
-
-:: Get the drive letter without colon for process checking
-for /f "tokens=1 delims=:" %%a in ("!BOOTFS_DRIVE!") do set "DRIVE_LETTER=%%a"
-
-echo Finding processes using drive !BOOTFS_DRIVE!...
-echo.
-
-:: Use PowerShell to find processes with open handles on the drive
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$drive = '!BOOTFS_DRIVE!'; $driveLetter = '!DRIVE_LETTER!'; $processes = @(); Get-Process | ForEach-Object { try { $procPath = $_.Path; $procCmdLine = ''; try { $procCmdLine = (Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $_.Id)).CommandLine } catch {}; if (($procPath -like ($drive + '*')) -or ($procCmdLine -like ('*' + $drive + '*')) -or ($procCmdLine -like ('*' + $driveLetter + ':*'))) { $processes += $_ } } catch {} }; if ($processes.Count -eq 0) { Write-Host 'No processes found using the bootfs partition.' -ForegroundColor Green; exit 0 } else { Write-Host ('Found ' + $processes.Count + ' process(es) using the bootfs partition:') -ForegroundColor Yellow; $processes | ForEach-Object { Write-Host ('  PID: ' + $_.Id + ' - ' + $_.ProcessName) }; exit 1 }"
-
-if errorlevel 1 (
-    echo.
-    echo Processes are using the bootfs partition.
-    echo Press Enter to kill these processes and eject the drive...
-    pause >nul
-    
-    echo.
-    echo Killing processes...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$drive = '!BOOTFS_DRIVE!'; $driveLetter = '!DRIVE_LETTER!'; Get-Process | ForEach-Object { try { $procPath = $_.Path; $procCmdLine = ''; try { $procCmdLine = (Get-CimInstance Win32_Process -Filter 'ProcessId = ' + $_.Id).CommandLine } catch {}; if (($procPath -like ($drive + '*')) -or ($procCmdLine -like ('*' + $drive + '*')) -or ($procCmdLine -like ('*' + $driveLetter + ':*'))) { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue; Write-Host ('Killed PID: ' + $_.Id + ' - ' + $_.ProcessName) } } catch {} }"
-    
-    echo Waiting for processes to terminate...
-    timeout /t 2 /nobreak >nul
-) else (
-    echo No processes found using the bootfs partition.
-)
-
-echo.
+:: Eject the drive
 echo Ejecting drive !BOOTFS_DRIVE!...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $driveLetter = '!DRIVE_LETTER!:'; $driveEject = New-Object -comObject Shell.Application; $driveEject.Namespace(17).ParseName($driveLetter).InvokeVerb('Eject'); exit 0 } catch { Write-Host 'Error ejecting drive: ' + $_.Exception.Message -ForegroundColor Red; exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$drive = '!BOOTFS_DRIVE!'; $driveLetter = $drive.TrimEnd(':'); try { $driveEject = New-Object -comObject Shell.Application; $driveEject.Namespace(17).ParseName($drive).InvokeVerb('Eject'); Start-Sleep -Seconds 2; $stillMounted = Test-Path $drive -ErrorAction SilentlyContinue; if ($stillMounted) { Write-Host 'WARNING: Drive still appears to be mounted after ejection attempt.' -ForegroundColor Yellow; exit 1 } else { Write-Host 'Drive ejected successfully.' -ForegroundColor Green; exit 0 } } catch { Write-Host 'ERROR: Could not eject drive: ' + $_.Exception.Message -ForegroundColor Red; exit 1 }"
 
 if errorlevel 1 (
-    echo WARNING: Could not eject drive automatically.
+    echo WARNING: Could not eject drive automatically, or drive is still mounted.
     echo You may need to eject it manually from Windows Explorer.
 ) else (
     echo Drive ejected successfully.
