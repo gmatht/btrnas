@@ -27,19 +27,19 @@ set "IMAGER_PATH_32=C:\Program Files (x86)\Raspberry Pi Imager\rpi-imager.exe"
 :: Check if Raspberry Pi Imager is already installed
 echo Checking for existing installation...
 if exist "%IMAGER_PATH_64%" (
-    echo Found Raspberry Pi Imager at: %IMAGER_PATH_64%
+    echo Found Raspberry Pi Imager at: "%IMAGER_PATH_64%"
     set "IMAGER_PATH=%IMAGER_PATH_64%"
     goto :launch
 )
 if exist "%IMAGER_PATH_32%" (
-    echo Found Raspberry Pi Imager at: %IMAGER_PATH_32%
+    echo Found Raspberry Pi Imager at: "%IMAGER_PATH_32%"
     set "IMAGER_PATH=%IMAGER_PATH_32%"
     goto :launch
 )
 
 :: Check in user's AppData (portable installation)
 for /f "tokens=*" %%i in ('where /r "%LOCALAPPDATA%" rpi-imager.exe 2^>nul') do (
-    echo Found Raspberry Pi Imager at: %%i
+    echo Found Raspberry Pi Imager at: "%%i"
     set "IMAGER_PATH=%%i"
     goto :launch
 )
@@ -177,17 +177,17 @@ for %%d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
             if exist "%%d:\firmware\" (
                 set "BOOTFS_DRIVE=%%d:"
                 set "BOOTFS_FOUND=1"
-                echo Found bootfs partition at: %%d:\
+                echo Found bootfs partition at: %%d:
                 goto :found_bootfs
             ) else if exist "%%d:\boot\" (
                 set "BOOTFS_DRIVE=%%d:"
                 set "BOOTFS_FOUND=1"
-                echo Found bootfs partition at: %%d:\
+                echo Found bootfs partition at: %%d:
                 goto :found_bootfs
             ) else if exist "%%d:\config.txt" (
                 set "BOOTFS_DRIVE=%%d:"
                 set "BOOTFS_FOUND=1"
-                echo Found bootfs partition at: %%d:\
+                echo Found bootfs partition at: %%d:
                 goto :found_bootfs
             )
         )
@@ -206,7 +206,7 @@ if "%BOOTFS_FOUND%"=="0" (
     echo Available drives:
     for %%d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
         if exist "%%d:\" (
-            echo   %%d:\
+            echo   %%d:
         )
     )
     pause
@@ -214,7 +214,7 @@ if "%BOOTFS_FOUND%"=="0" (
 )
 
 echo.
-echo Bootfs partition found: %BOOTFS_DRIVE%\
+echo Bootfs partition found: %BOOTFS_DRIVE%
 echo.
 
 :: Create /boot directory if it doesn't exist
@@ -247,7 +247,7 @@ if %FILES_COPIED% equ 0 (
 )
 
 echo.
-echo Successfully copied %FILES_COPIED% file(s) to %BOOTFS_DRIVE%\boot\
+echo Successfully copied %FILES_COPIED% file(s) to %BOOTFS_DRIVE%\boot
 echo.
 
 :: Step 4: Append to firmware/firstboot.sh
@@ -296,7 +296,7 @@ echo ========================================
 echo.
 echo Summary:
 echo   - FAT32 partition created (if needed)
-echo   - .sh files copied to %BOOTFS_DRIVE%\boot\
+echo   - .sh files copied to %BOOTFS_DRIVE%\boot
 echo   - firstboot.sh updated to run setup.sh
 echo.
 echo The SD card is ready to use!
