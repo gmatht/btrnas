@@ -284,6 +284,296 @@ sudo python3 btrfs_snapshot_monitor.py --config /etc/btrfs_snapshot_monitor.conf
 - The systemd service includes security hardening options
 - Log files may contain sensitive information about file system structure
 
+## Accessing Snapshots via FTP and SMB
+
+### Setup
+
+To allow users to access BTRFS snapshots via vsftpd (FTP) and Samba (SMB), run the installation script:
+
+```bash
+sudo bash install_vsftpd_samba.sh
+```
+
+This script will:
+- Install vsftpd and Samba packages
+- Configure vsftpd to share `/btrfs` directory
+- Configure Samba with `[btrfs]` and `[homes]` shares
+- Set up proper permissions
+- Configure firewall rules
+- Start and enable services
+
+### Manual Configuration
+
+If you prefer to configure manually:
+
+1. **Copy configuration files:**
+   ```bash
+   sudo cp vsftpd.conf.example /etc/vsftpd.conf
+   sudo cp smb.conf.example /etc/samba/smb.conf
+   ```
+
+2. **Set up permissions:**
+   ```bash
+   sudo bash setup_btrfs_permissions.sh
+   ```
+
+3. **Start services:**
+   ```bash
+   sudo systemctl enable vsftpd samba
+   sudo systemctl start vsftpd smbd nmbd
+   ```
+
+### Access Methods
+
+**FTP (vsftpd):**
+- Connect to the server via FTP
+- Users are chrooted to `/btrfs`
+- Navigate to:
+  - `/@home/username/` - Your home directory (read-write)
+  - `/snapshot/` - Snapshot directory (read-only, enforced by BTRFS)
+
+**SMB (Samba):**
+- **BTRFS share**: `\\server\btrfs`
+  - Navigate to `@home/username/` for home directory (read-write)
+  - Navigate to `snapshot/` for snapshots (read-only)
+- **Homes share**: `\\server\username`
+  - Direct access to your home directory (read-write)
+
+### Security Notes
+
+- **Path Traversal Prevention**: vsftpd uses chroot to jail users to `/btrfs`
+- **BTRFS Read-Only**: Snapshots are created with `-r` flag, so they cannot be modified even if services allow writes
+- **Directory Permissions**: Users can browse snapshots but only access their own home subdirectories
+- **Authentication**: System user accounts required for both services
+
+### Running Permission Script After New Snapshots
+
+After new snapshots are created, run the permissions script to ensure proper access:
+
+```bash
+sudo bash setup_btrfs_permissions.sh
+```
+
+You can automate this by adding it to the snapshot monitor script or running it as a cron job.
+
+## Windows Users Backup to Samba
+
+### Overview
+
+A simple backup solution to continuously sync `C:\Users` from Windows machines to the Linux Samba share. Uses Windows built-in `robocopy` tool with no external dependencies.
+
+### Quick Start
+
+1. **Run the installer:**
+   ```powershell
+   # Right-click and "Run as administrator"
+   cd windows_backup_client
+   .\install_windows_backup.ps1
+   ```
+
+2. The installer will:
+   - Prompt for Samba share path (e.g., `\\server\btrfs\backups\users`)
+   - Prompt for credentials if needed
+   - Ask for backup method (scheduled or continuous)
+   - Create a Windows scheduled task to run the backup automatically
+
+3. **Start the backup:**
+   ```powershell
+   Start-ScheduledTask -TaskName "WindowsUsersBackupToSamba"
+   ```
+
+### Manual Usage
+
+**PowerShell Script:**
+```powershell
+.\backup_users_to_samba.ps1 -DestinationShare "\\server\btrfs\backups\users" -IntervalMinutes 5
+```
+
+**Batch File:**
+```cmd
+# Edit backup_users_to_samba.bat to set DEST variable, then run:
+backup_users_to_samba.bat
+```
+
+### Configuration Options
+
+**Scheduled Mode (Recommended):**
+- Runs backup every N minutes (default: 5 minutes)
+- More reliable and easier to manage
+- Can be stopped/started via Task Scheduler
+
+**Continuous Mode:**
+- Monitors for changes continuously using robocopy `/MON:1`
+- Syncs immediately when changes are detected
+- Runs until manually stopped
+
+### Excluded Directories
+
+The backup automatically excludes common temporary and cache directories:
+- `AppData\Local\Temp`
+- `AppData\Local\Microsoft\Windows\INetCache`
+- `AppData\Local\Microsoft\Windows\WebCache`
+- `AppData\Roaming\Microsoft\Windows\Recent`
+- `$Recycle.Bin`
+
+### Managing the Backup
+
+**Check task status:**
+```powershell
+Get-ScheduledTask -TaskName "WindowsUsersBackupToSamba" | Get-ScheduledTaskInfo
+```
+
+**View logs:**
+```powershell
+Get-Content windows_backup_client\backup_log.txt -Tail 50
+```
+
+**Stop the backup:**
+```powershell
+Stop-ScheduledTask -TaskName "WindowsUsersBackupToSamba"
+```
+
+**Uninstall:**
+```powershell
+.\install_windows_backup.ps1 -Uninstall
+```
+
+### Troubleshooting
+
+1. **"Cannot access share"**: Ensure the Samba share is accessible and credentials are correct
+2. **"Access denied"**: Run the installer as Administrator
+3. **Backup not running**: Check Task Scheduler and ensure the task is enabled
+4. **Network disconnections**: The script will retry automatically (3 retries with 5 second wait)
+
+### Security Notes
+
+- Credentials are stored in the scheduled task (encrypted by Windows)
+- Consider using a dedicated backup user account on the Samba server
+- The backup runs with the user's permissions (may need admin for some files)
+
+## Linux Client Backup to Samba
+
+### Overview
+
+A continuous backup solution using `lsyncd` to sync local directories (e.g., `/home`) to the Samba share. Uses real-time file monitoring and rsync for efficient synchronization. Automatically starts on boot via systemd.
+
+### Quick Start
+
+1. **Run the installer:**
+   ```bash
+   cd linux_backup_client
+   sudo bash install_linux_backup.sh
+   ```
+
+2. The installer will:
+   - Install lsyncd, cifs-utils, and rsync packages
+   - Prompt for Samba server, share name, and credentials
+   - Prompt for source directory (default: `/home`)
+   - Create secure credentials file
+   - Set up Samba mount as systemd service
+   - Configure lsyncd for continuous sync
+   - Enable services to start on boot
+
+3. **Verify the setup:**
+   ```bash
+   systemctl status lsyncd-backup
+   systemctl status mnt-samba-backup.mount
+   ```
+
+### How It Works
+
+- **lsyncd**: Monitors the source directory for changes using inotify
+- **Samba Mount**: Mounts the Samba share at `/mnt/samba-backup` using systemd
+- **rsync**: Syncs changes efficiently to the mounted share
+- **Systemd Services**: Both mount and lsyncd run as systemd services, starting automatically on boot
+
+### Configuration
+
+The main configuration file is located at `/etc/lsyncd/lsyncd.conf.lua`. Key settings:
+
+- **Source directory**: Default is `/home`, can be changed during installation
+- **Target**: `/mnt/samba-backup` (mounted Samba share)
+- **Exclude patterns**: Automatically excludes cache, temp files, trash, etc.
+- **Sync delay**: 5 seconds (configurable)
+
+### Managing the Backup
+
+**Check service status:**
+```bash
+systemctl status lsyncd-backup
+systemctl status mnt-samba-backup.mount
+```
+
+**View logs:**
+```bash
+# lsyncd logs
+tail -f /var/log/lsyncd/lsyncd.log
+
+# Service logs
+journalctl -u lsyncd-backup -f
+journalctl -u mnt-samba-backup.mount -f
+```
+
+**Restart services:**
+```bash
+systemctl restart lsyncd-backup
+systemctl restart mnt-samba-backup.mount
+```
+
+**Stop/Start services:**
+```bash
+systemctl stop lsyncd-backup
+systemctl start lsyncd-backup
+```
+
+**Manually mount/unmount Samba share:**
+```bash
+# Mount
+systemctl start mnt-samba-backup.mount
+
+# Unmount
+systemctl stop mnt-samba-backup.mount
+```
+
+### Troubleshooting
+
+1. **"Cannot mount Samba share"**: 
+   - Check network connectivity: `ping <samba-server>`
+   - Verify credentials in `/etc/samba/backup-credentials`
+   - Test mount manually: `sudo mount -t cifs //server/share /mnt/samba-backup -o credentials=/etc/samba/backup-credentials`
+
+2. **"lsyncd not syncing"**:
+   - Check if mount is active: `systemctl status mnt-samba-backup.mount`
+   - Check lsyncd logs: `tail -f /var/log/lsyncd/lsyncd.log`
+   - Verify configuration: `lsyncd -nodaemon -config /etc/lsyncd/lsyncd.conf.lua`
+
+3. **"Permission denied"**:
+   - Check mount permissions: `ls -la /mnt/samba-backup`
+   - Verify credentials file permissions (should be 600): `ls -l /etc/samba/backup-credentials`
+
+4. **"Service won't start"**:
+   - Check dependencies: `systemctl list-dependencies lsyncd-backup`
+   - Check mount status: `mountpoint /mnt/samba-backup`
+   - View detailed logs: `journalctl -u lsyncd-backup -n 50`
+
+### Security Notes
+
+- Credentials are stored in `/etc/samba/backup-credentials` with 600 permissions (root only)
+- Consider using a dedicated backup user account on the Samba server
+- The Samba share is mounted with appropriate file/directory permissions (0664/0775)
+- lsyncd runs as root to access all files in the source directory
+
+### Excluded Directories
+
+The backup automatically excludes:
+- Cache directories (`.cache`, browser caches)
+- Temporary files (`.tmp`, `.temp`)
+- Trash directories (`.Trash`, `.local/share/Trash`)
+- System files (`.thumbnails`, `.Xauthority`)
+- Package manager caches (`.npm`, `.pip`, `.cargo`)
+
+You can modify exclusions in `/etc/lsyncd/lsyncd.conf.lua`.
+
 ## File Structure
 
 ```
@@ -296,8 +586,21 @@ btr_snap/
 ├── install_rpi_imager.bat          # Windows: Automated setup
 ├── install_rpi_imager.sh           # Linux: Automated setup
 ├── install_btrfs_monitor.sh        # Install monitor as service
+├── install_vsftpd_samba.sh         # Install and configure vsftpd/Samba
+├── setup_btrfs_permissions.sh      # Set permissions on /btrfs structure
+├── vsftpd.conf.example             # vsftpd configuration template
+├── smb.conf.example                # Samba configuration template
 ├── setup.sh                        # Setup script (runs on first boot)
 ├── configure_services.sh           # Configure system services
+├── windows_backup_client/          # Windows backup client
+│   ├── backup_users_to_samba.ps1   # PowerShell backup script
+│   ├── backup_users_to_samba.bat   # Batch file backup script
+│   └── install_windows_backup.ps1  # Installation script
+├── linux_backup_client/            # Linux backup client
+│   ├── lsyncd.conf                 # lsyncd configuration template
+│   ├── mount_samba.sh              # Samba mount helper script
+│   ├── install_linux_backup.sh     # Installation script
+│   └── lsyncd-backup.service       # Systemd service file
 └── README.md                       # This file
 ```
 
