@@ -1,0 +1,24 @@
+[Unit]
+Description=lsyncd - Live Syncing Daemon for Samba Backup
+Documentation=man:lsyncd(8)
+After=network.target mnt-samba-backup.mount
+Requires=mnt-samba-backup.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/lsyncd -nodaemon -config /etc/lsyncd/lsyncd.conf.lua
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+
