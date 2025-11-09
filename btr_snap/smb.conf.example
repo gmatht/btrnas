@@ -1,0 +1,37 @@
+# Samba configuration for BTRFS snapshot access
+# Add these sections to your /etc/samba/smb.conf
+# Backup your existing smb.conf first!
+
+[global]
+   workgroup = WORKGROUP
+   server string = BTRFS Server
+   security = user
+   map to guest = Bad User
+   dns proxy = no
+
+# Share 1: BTRFS directory - users can access homes and snapshots
+[btrfs]
+   comment = BTRFS Filesystem (Homes and Snapshots)
+   path = /btrfs
+   read only = no
+   browseable = yes
+   valid users = @users
+   force group = users
+   create mask = 0664
+   directory mask = 0775
+   # Users can navigate to:
+   # @home/username/ - Their home directory (read-write)
+   # snapshot/ - Snapshot directory (read-only, enforced by BTRFS)
+
+# Share 2: Standard homes share
+[homes]
+   comment = User Home Directories
+   path = /home
+   # If home was migrated to BTRFS, use: path = /btrfs/@home
+   read only = no
+   browseable = no
+   valid users = %S
+   create mask = 0600
+   directory mask = 0700
+   # Users access via \\server\username
+

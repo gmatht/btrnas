@@ -1,0 +1,44 @@
+# vsftpd configuration for BTRFS snapshot access
+# Copy this to /etc/vsftpd.conf and adjust as needed
+
+# Enable local users
+local_enable=YES
+
+# Allow writes (BTRFS will enforce read-only on snapshots)
+write_enable=YES
+
+# REQUIRED: Jail users to /btrfs to prevent path traversal
+chroot_local_user=YES
+
+# Set /btrfs as the root directory
+local_root=/btrfs
+
+# Allow writes within chroot (for home directories)
+allow_writeable_chroot=YES
+
+# Enable passive mode for firewall compatibility
+pasv_enable=YES
+pasv_min_port=21100
+pasv_max_port=21110
+
+# Security settings
+hide_ids=YES
+userlist_enable=NO
+tcp_wrappers=YES
+
+# Logging
+xferlog_enable=YES
+log_ftp_protocol=YES
+vsftpd_log_file=/var/log/vsftpd.log
+
+# Connection settings
+max_clients=50
+max_per_ip=5
+idle_session_timeout=600
+data_connection_timeout=120
+
+# SSL/TLS (optional - uncomment if needed)
+# ssl_enable=YES
+# rsa_cert_file=/etc/ssl/certs/vsftpd.pem
+# rsa_private_key_file=/etc/ssl/private/vsftpd.key
+
