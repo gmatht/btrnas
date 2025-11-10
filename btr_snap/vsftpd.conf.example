@@ -42,3 +42,4 @@ data_connection_timeout=120
 # rsa_cert_file=/etc/ssl/certs/vsftpd.pem
 # rsa_private_key_file=/etc/ssl/private/vsftpd.key
 
+

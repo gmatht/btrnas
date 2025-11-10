@@ -39,3 +39,4 @@ echo [%date% %time%] Waiting %INTERVAL% minutes until next backup...
 timeout /t %INTERVAL% /nobreak >nul
 goto backup
 
+

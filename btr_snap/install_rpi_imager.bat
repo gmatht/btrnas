@@ -310,6 +310,11 @@ echo.
 echo Successfully copied !FILES_COPIED! file(s) to !BTRNAS_DIR!
 echo.
 
+:: Exit here for testing - remove this line when ready to modify firstboot script
+echo Exiting before firstboot script modification (testing mode)
+endlocal
+exit /b 0
+
 :: Step 4: Append to firmware/firstboot.sh, firmware/firstrun.sh, firstboot.sh, or firstrun.sh
 echo ========================================
 echo Step 3: Updating firstboot/firstrun script
